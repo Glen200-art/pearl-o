@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GiwaPad — Ký bước 2: Phát hành GPAD</title>
+<style>
+  body { font-family: ui-monospace, Menlo, monospace; background:#0b0e14; color:#e6e6e6; margin:0; padding:24px; }
+  .card { max-width:680px; margin:0 auto; background:#12161f; border:1px solid #232a38; border-radius:12px; padding:24px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .muted { color:#8b94a7; font-size:13px; }
+  .row { margin:14px 0; font-size:14px; word-break:break-all; }
+  button { background:#2f81f7; color:#fff; border:0; border-radius:8px; padding:14px 22px; font-size:16px; cursor:pointer; width:100%; }
+  button:disabled { background:#3a4356; cursor:default; }
+  #status { margin-top:16px; font-size:14px; white-space:pre-wrap; word-break:break-all; }
+  .err { color:#ff7b72; } .ok { color:#3fb950; }
+  a { color:#58a6ff; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>GiwaPad — Bước 2/6: Phát hành token GPAD</h1>
+  <p class="muted">GIWA Sepolia testnet (chain 91342) · Lệnh đã được soạn bằng Ammora SDK và mô phỏng thành công · Config: #78 (đã tạo ở bước 1) · Token: GPAD — GiwaPad Token · Phí: 0 ETH (chỉ tốn gas testnet)</p>
+  <div class="row">Ví ký (bắt buộc đúng ví này):<br><b>0x1976933E1e20dcA9124B5C273b52d796f74d1D57</b></div>
+  <div class="row">Gửi tới LaunchFactory: 0x35353a2Dab7426EcCAe6f5FB267702a542ab68fA</div>
+  <button id="signBtn">Ký bước 2: Phát hành GPAD</button>
+  <div id="status"></div>
+</div>
+<script>
+const OPERATOR = '0x1976933E1e20dcA9124B5C273b52d796f74d1D57';
+const RPC = 'https://sepolia-rpc.giwa.io';
+const TX = { to: '0x35353a2Dab7426EcCAe6f5FB267702a542ab68fA', value: '0x0', data: '0x697511bc00000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000001c0000000000000000000000000000000000000000000000000000000000000004e0000000000000000000000000000000000000000000000000000000000000009000000000000000000000000000000000000000000000000000000000000000d4769776150616420546f6b656e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000044750414400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005368747470733a2f2f6d7573652e61692f732f676977617061642d6174367865786535646a6d6f732f694451626561496d385379396a4e517361654a6574706530706e445f4b4b69715a4262613348645876367300000000000000000000000000000000000000000000000000000000000000000000000000000000000000005368747470733a2f2f6d7573652e61692f732f676977617061642d6174367865786535646a6d6f732f694451626561496d385379396a4e517361654a6574706530706e445f4b4b69715a4262613348645876367300000000000000000000000000' };
+const statusEl = document.getElementById('status');
+const btn = document.getElementById('signBtn');
+function say(msg, cls) { statusEl.innerHTML = cls ? '<span class="' + cls + '">' + msg + '</span>' : msg; }
+async function rpc(method, params) {
+  const r = await fetch(RPC, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({jsonrpc:'2.0', id:1, method, params}) });
+  const j = await r.json(); if (j.error) throw new Error(j.error.message || method); return j.result;
+}
+btn.onclick = async () => {
+  try {
+    if (!window.ethereum) { say('Không thấy ví (Rabby) trong trình duyệt này. Mở trang bằng Chrome đã cài Rabby.', 'err'); return; }
+    btn.disabled = true; say('Đang kết nối ví…');
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    const acct = (accounts && accounts[0]) || '';
+    if (acct.toLowerCase() !== OPERATOR.toLowerCase()) { say('Sai ví: đang kết nối ' + acct + ' — hãy chuyển Rabby sang ví 0x1976…1D57 rồi bấm lại.', 'err'); btn.disabled = false; return; }
+    try {
+      await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x164ce' }] });
+    } catch (e) {
+      if (e && e.code === 4902) {
+        await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [{ chainId: '0x164ce', chainName: 'GIWA Sepolia', rpcUrls: [RPC], nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, blockExplorerUrls: ['https://sepolia-explorer.giwa.io'] }] });
+      } else if (e && e.code === 4001) { say('Anh đã hủy chuyển mạng. Bấm lại khi sẵn sàng.', 'err'); btn.disabled = false; return; }
+    }
+    say('Hãy bấm Confirm trong Rabby…');
+    const hash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: acct, to: TX.to, value: TX.value, data: TX.data }] });
+    say('Đã gửi giao dịch: ' + hash + '\nĐang chờ xác nhận trên chain…');
+    for (let i = 0; i < 60; i++) {
+      await new Promise(r => setTimeout(r, 4000));
+      const receipt = await rpc('eth_getTransactionReceipt', [hash]);
+      if (receipt) {
+        if (receipt.status === '0x1') {
+          say('✅ Tạo Config thành công!\nTx: https://sepolia-explorer.giwa.io/tx/' + hash + '\nBáo lại cho Muse để nhận bước ký tiếp theo.', 'ok');
+        } else {
+          say('Giao dịch bị revert trên chain. Tx: ' + hash + ' — báo lại cho Muse kiểm tra.', 'err'); btn.disabled = false;
+        }
+        return;
+      }
+    }
+    say('Chưa thấy xác nhận sau 4 phút. Tx: ' + hash + ' — báo lại cho Muse kiểm tra.', 'err'); btn.disabled = false;
+  } catch (e) {
+    say('Lỗi: ' + (e && e.message ? e.message : e), 'err'); btn.disabled = false;
+  }
+};
+</script>
+</body>
+</html>
